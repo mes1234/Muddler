@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.1.32104.313
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Muddler", "Muddler\Muddler.csproj", "{6FD164F1-3BFD-4DF2-B574-7DA18734F614}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Muddler", "Muddler\Muddler.csproj", "{6FD164F1-3BFD-4DF2-B574-7DA18734F614}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Muddler.Proxy", "Muddler.Proxy\Muddler.Proxy.csproj", "{2D0EFE53-B3CA-471C-B757-00D6C05D6AA6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{6FD164F1-3BFD-4DF2-B574-7DA18734F614}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6FD164F1-3BFD-4DF2-B574-7DA18734F614}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6FD164F1-3BFD-4DF2-B574-7DA18734F614}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2D0EFE53-B3CA-471C-B757-00D6C05D6AA6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2D0EFE53-B3CA-471C-B757-00D6C05D6AA6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2D0EFE53-B3CA-471C-B757-00D6C05D6AA6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2D0EFE53-B3CA-471C-B757-00D6C05D6AA6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
