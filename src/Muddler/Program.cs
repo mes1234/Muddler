@@ -11,10 +11,11 @@ class Program
 {
     static async Task Main(string[] args)
     {
-        var proxy = new ProxyService(new Config(), IPAddress.Parse("127.0.0.1"), 3000);
+        var proxy = new ProxyService(new Config(), IPAddress.Parse("127.0.0.1"), 5555);
 
         var cts = new CancellationTokenSource();
 
+        
         await proxy.Serve(cts.Token);
     }
 }

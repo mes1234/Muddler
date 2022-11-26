@@ -10,7 +10,7 @@ namespace Muddler.Proxy;
 
 public class ProxyService
 {
-    private const int Backlog = 5;
+    private const int Backlog = 50;
     private readonly Config _config;
     private readonly IPAddress _address;
     private readonly int _port;
@@ -36,72 +36,127 @@ public class ProxyService
 
         Console.WriteLine("Attached handler");
 
+
         while (true)
         {
+            Console.WriteLine("Begin listening for new connections");
             var handler = await server.AcceptAsync(cancellationToken);
 
             var pc = new ProxyClient(handler, _address, _port);
 
-            await pc.Start();
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            Task.Run(async () =>
+            {
+                await pc.Start();
+
+                handler.Shutdown(SocketShutdown.Both);
+                handler.Close();
+
+            }, cancellationToken);
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
         }
     }
 }
 
+/// <summary>
+/// Proxy client shovels data from 
+/// In* - Client of Muddler
+/// to
+/// Out* - Proxied server
+/// </summary>
 internal class ProxyClient
 {
-    private readonly Socket _client;
+    private readonly Socket _inSocket;
     private readonly IPAddress _address;
     private readonly int _port;
+    private readonly int _context;
 
-    public ProxyClient(Socket client, IPAddress address, int port)
+    public ProxyClient(Socket inSocket, IPAddress address, int port)
     {
-        _client = client;
+        _inSocket = inSocket;
         _address = address;
         _port = port;
+        _context = (new Random()).Next(0, 100);
     }
 
     public async Task Start()
     {
-        using Socket client = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        Console.WriteLine($"CTX:{_context}: Begin handling new request");
+
+        var outSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+        var cts = new CancellationTokenSource();
 
         var ipEndpoint = new IPEndPoint(_address, _port);
 
-        await client.ConnectAsync(ipEndpoint);
+        await outSocket.ConnectAsync(ipEndpoint);
 
-        while (true)
-        { 
+        var fromClientToProxied = Task.Run(async () => await Shuffle("Proxied to Client", outSocket, _inSocket, cts, cts.Token));
 
-          var inbound =  Task.Run(async () =>
+
+        var fromProxiedToClient = Task.Run(async () => await Shuffle("Client to Proxied", _inSocket, outSocket, cts, cts.Token));
+
+        Task.WaitAll(new[] { fromClientToProxied, fromProxiedToClient });
+
+        CloseAllSockets(outSocket, _inSocket);
+
+        Console.WriteLine($"CTX:{_context}: Both streaming ended");
+    }
+    private void CloseAllSockets(Socket outSocket, Socket inSocket)
+    {
+        if (outSocket.Connected)
+        {
+            outSocket.Shutdown(SocketShutdown.Both);
+            outSocket.Close();
+
+            Console.WriteLine($"CTX:{_context}: Closed socket from Muddler to proxied");
+        }
+
+        if (inSocket.Connected)
+        {
+            inSocket.Shutdown(SocketShutdown.Both);
+            inSocket.Close();
+
+            Console.WriteLine($"CTX:{_context}: Closed socket from client to Muddler");
+        }
+    }
+
+    private async Task Shuffle(string direction, Socket outSocket, Socket inSocket, CancellationTokenSource cts, CancellationToken ct)
+    {
+        Console.WriteLine($"CTX:{_context}: Begin streaming from {direction}");
+
+        var buffer = new byte[1_024];
+
+        while (inSocket.Connected && outSocket.Connected && !ct.IsCancellationRequested)
+        {
+
+            try
             {
-                var buffer_in = new byte[1_024];
-                while (_client.Connected)
-                {
-                  
-                    var received = await _client.ReceiveAsync(buffer_in, SocketFlags.None);
+                int size = await outSocket.ReceiveAsync(buffer, SocketFlags.None, ct);
 
-                    await client.SendAsync(buffer_in, SocketFlags.None);
-                }
-            });
 
-           var outbound = Task.Run(async () =>
+                var deserialized = Encoding.UTF8.GetString(buffer, 0, size);
+
+                var corrected = deserialized.Replace("8080", "5555");
+
+                var correctedBytes = Encoding.UTF8.GetBytes(corrected);
+
+                Console.WriteLine($"CTX:{_context}: DIRECTION {direction}: CONTENT : {corrected}");
+
+                if (size == 0)
+                    break;
+
+                await inSocket.SendAsync(correctedBytes, SocketFlags.None, ct);
+            }
+            catch (Exception ex)
             {
-                var buffer_out = new byte[1_024];
-                while (client.Connected)
-                {
-                  
-                    var received = await client.ReceiveAsync(buffer_out, SocketFlags.None);
 
-                    await _client.SendAsync(buffer_out, SocketFlags.None);
-                }
-            });
-
-         await  Task.WhenAll(new Task[] { inbound, outbound });
-
-         break;
-
+            }
+         
 
         }
 
-        
+        if (!ct.IsCancellationRequested)
+            cts.Cancel();
     }
 }
