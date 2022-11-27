@@ -70,6 +70,9 @@ internal class ProxyClient
     private readonly IPAddress _address;
     private readonly int _port;
     private readonly int _context;
+    private readonly CancellationTokenSource _cts;
+    private readonly byte[] _buffer_in = new byte[1_024];
+    private readonly byte[] _buffer_out = new byte[1_024];
 
     public ProxyClient(Socket inSocket, IPAddress address, int port)
     {
@@ -77,6 +80,7 @@ internal class ProxyClient
         _address = address;
         _port = port;
         _context = (new Random()).Next(0, 100);
+        _cts = new CancellationTokenSource();
     }
 
     public async Task Start()
@@ -85,16 +89,13 @@ internal class ProxyClient
 
         var outSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
-        var cts = new CancellationTokenSource();
-
         var ipEndpoint = new IPEndPoint(_address, _port);
 
         await outSocket.ConnectAsync(ipEndpoint);
 
-        var fromClientToProxied = Task.Run(async () => await Shuffle("Proxied to Client", outSocket, _inSocket, cts, cts.Token));
+        var fromClientToProxied = Task.Run(async () => await Shuffle("Proxied to Client", _buffer_in, outSocket, _inSocket, _cts, _cts.Token));
 
-
-        var fromProxiedToClient = Task.Run(async () => await Shuffle("Client to Proxied", _inSocket, outSocket, cts, cts.Token));
+        var fromProxiedToClient = Task.Run(async () => await Shuffle("Client to Proxied", _buffer_out, _inSocket, outSocket, _cts, _cts.Token));
 
         Task.WaitAll(new[] { fromClientToProxied, fromProxiedToClient });
 
@@ -121,42 +122,36 @@ internal class ProxyClient
         }
     }
 
-    private async Task Shuffle(string direction, Socket outSocket, Socket inSocket, CancellationTokenSource cts, CancellationToken ct)
+    private async Task Shuffle(string direction, byte[] buffer, Socket outSocket, Socket inSocket, CancellationTokenSource cts, CancellationToken ct)
     {
         Console.WriteLine($"CTX:{_context}: Begin streaming from {direction}");
-
-        var buffer = new byte[1_024];
 
         while (inSocket.Connected && outSocket.Connected && !ct.IsCancellationRequested)
         {
 
-            try
-            {
-                int size = await outSocket.ReceiveAsync(buffer, SocketFlags.None, ct);
+            int size = await outSocket.ReceiveAsync(buffer, SocketFlags.None, ct);
 
+            var bufferToSend = CorrectHttpHeaders(direction, ref buffer, size);
 
-                var deserialized = Encoding.UTF8.GetString(buffer, 0, size);
+            if (size == 0)
+                break;
 
-                var corrected = deserialized.Replace("8080", "5555");
-
-                var correctedBytes = Encoding.UTF8.GetBytes(corrected);
-
-                Console.WriteLine($"CTX:{_context}: DIRECTION {direction}: CONTENT : {corrected}");
-
-                if (size == 0)
-                    break;
-
-                await inSocket.SendAsync(correctedBytes, SocketFlags.None, ct);
-            }
-            catch (Exception ex)
-            {
-
-            }
-         
-
+            await inSocket.SendAsync(bufferToSend, SocketFlags.None, ct);
         }
 
         if (!ct.IsCancellationRequested)
             cts.Cancel();
+    }
+
+    private byte[] CorrectHttpHeaders(string direction, ref byte[] buffer, int size)
+    {
+        var deserialized = Encoding.UTF8.GetString(buffer, 0, size);
+
+        var corrected = deserialized.Contains("5555")
+              ? Encoding.UTF8.GetBytes(deserialized.Replace("8080", "5555"))
+              : buffer;
+
+        Console.WriteLine($"CTX:{_context}: DIRECTION {direction}: CONTENT : {deserialized}");
+        return corrected;
     }
 }

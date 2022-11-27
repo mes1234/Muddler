@@ -15,7 +15,6 @@ class Program
 
         var cts = new CancellationTokenSource();
 
-        
         await proxy.Serve(cts.Token);
     }
 }
