@@ -135,7 +135,7 @@ internal class ProxyClient
                 if (size == 0)
                     break;
 
-                LogContent(direction, ref buffer, size);
+                //LogContent(direction, ref buffer, size);
 
                 var corrected = CorrectHttpHeaders(direction,ref buffer, size);
 
@@ -153,14 +153,14 @@ internal class ProxyClient
 
     private ArraySegment<byte> CorrectHttpHeaders(string direction, ref byte[] buffer, int size)
     {
-        var deserialized = Encoding.UTF8.GetString(buffer, 0, size);
+        //var deserialized = Encoding.UTF8.GetString(buffer, 0, size);
 
-        var corrected = deserialized.Contains("5555")
-              ? buffer//Encoding.UTF8.GetBytes(deserialized.Replace("8080", "5555"))
-              : buffer;
+        //var corrected = deserialized.Contains("5555")
+        //      ? buffer//Encoding.UTF8.GetBytes(deserialized.Replace("8080", "5555"))
+        //      : buffer;
 
-        Console.WriteLine($"CTX:{_context}: DIRECTION {direction}: CONTENT : {deserialized}");
-        return corrected;
+        //Console.WriteLine($"CTX:{_context}: DIRECTION {direction}: CONTENT : {deserialized}");
+        return buffer;
     }
 
     private void LogContent(string direction, ref byte[] buffer, int size)

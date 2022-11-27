@@ -13,7 +13,7 @@ class Program
     {
         try
         {
-            var proxy = new ProxyService(new Config(), IPAddress.Parse("127.0.0.1"), 5500);
+            var proxy = new ProxyService(new Config(), IPAddress.Parse("127.0.0.1"), 80);
 
             var cts = new CancellationTokenSource();
 
