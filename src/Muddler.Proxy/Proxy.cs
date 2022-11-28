@@ -152,7 +152,6 @@ internal class ProxyClient
         {
             Console.WriteLine($"CTX: {_context} encountered error {ex.Message} ");
         }
-
     }
 
     private void LogContent(string direction, Memory<byte> buffer, int size)
