@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -36,10 +37,10 @@ public class ProxyService
 
         Console.WriteLine("Attached handler");
 
-
         while (true)
         {
             Console.WriteLine("Begin listening for new connections");
+
             var handler = await server.AcceptAsync(cancellationToken);
 
             var pc = new ProxyClient(handler, _address, _port);
@@ -58,6 +59,7 @@ public class ProxyService
     }
 }
 
+
 /// <summary>
 /// Proxy client shovels data from 
 /// In* - Client of Muddler
@@ -66,12 +68,11 @@ public class ProxyService
 /// </summary>
 internal class ProxyClient
 {
+    private const bool LogEnabled = false;
     private readonly Socket _inSocket;
     private readonly IPAddress _address;
     private readonly int _port;
     private readonly int _context;
-    private readonly byte[] _buffer_in = new byte[1_024];
-    private readonly byte[] _buffer_out = new byte[1_024];
 
     public ProxyClient(Socket inSocket, IPAddress address, int port)
     {
@@ -91,9 +92,9 @@ internal class ProxyClient
 
         await outSocket.ConnectAsync(ipEndpoint);
 
-        var fromClientToProxied = Task.Run(async () => await Shuffle("Proxied to Client", _buffer_in, outSocket, _inSocket));
+        var fromClientToProxied = Task.Run(async () => await Shuffle("Proxied to Client", outSocket, _inSocket));
 
-        var fromProxiedToClient = Task.Run(async () => await Shuffle("Client to Proxied", _buffer_out, _inSocket, outSocket));
+        var fromProxiedToClient = Task.Run(async () => await Shuffle("Client to Proxied", _inSocket, outSocket));
 
         Task.WaitAll(new[] { fromClientToProxied, fromProxiedToClient });
 
@@ -120,52 +121,43 @@ internal class ProxyClient
         }
     }
 
-    private async Task Shuffle(string direction, byte[] buffer, Socket outSocket, Socket inSocket)
+    private async Task Shuffle(string direction, Socket outSocket, Socket inSocket)
     {
         try
         {
+            using var memPool = MemoryPool<byte>.Shared.Rent(1_024);
+
+            var buffer = memPool.Memory;
+
             Console.WriteLine($"CTX:{_context}: Begin streaming from {direction}");
 
             while (true)
             {
                 if (!outSocket.Connected) break;
-                 
+
                 int size = await outSocket.ReceiveAsync(buffer, SocketFlags.None);
 
                 if (size == 0)
                     break;
 
-                //LogContent(direction, ref buffer, size);
-
-                var corrected = CorrectHttpHeaders(direction,ref buffer, size);
+                if (LogEnabled)
+                    LogContent(direction, buffer, size);
 
                 if (!inSocket.Connected) break;
-                await inSocket.SendAsync(corrected.Slice(0,size), SocketFlags.None);
+                await inSocket.SendAsync(buffer[..size], SocketFlags.None);
 
             }
         }
         catch (Exception ex)
         {
-
+            Console.WriteLine($"CTX: {_context} encountered error {ex.Message} ");
         }
 
     }
 
-    private ArraySegment<byte> CorrectHttpHeaders(string direction, ref byte[] buffer, int size)
+    private void LogContent(string direction, Memory<byte> buffer, int size)
     {
-        //var deserialized = Encoding.UTF8.GetString(buffer, 0, size);
-
-        //var corrected = deserialized.Contains("5555")
-        //      ? buffer//Encoding.UTF8.GetBytes(deserialized.Replace("8080", "5555"))
-        //      : buffer;
-
-        //Console.WriteLine($"CTX:{_context}: DIRECTION {direction}: CONTENT : {deserialized}");
-        return buffer;
-    }
-
-    private void LogContent(string direction, ref byte[] buffer, int size)
-    {
-        var deserialized = Encoding.UTF8.GetString(buffer, 0, size);
+        var deserialized = Encoding.UTF8.GetString(buffer.ToArray(), 0, size);
 
         Console.WriteLine($"CTX:{_context}: SENDING DIRECTION {direction}: CONTENT  : \n ---------------- \n\n {deserialized} \n\n ---------------- \n\n");
     }
