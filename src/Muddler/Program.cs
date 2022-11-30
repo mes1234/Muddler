@@ -9,15 +9,13 @@ namespace Muddler;
 
 class Program
 {
-    static async Task Main(string[] args)
+    static void Main(string[] args)
     {
         try
         {
-            var proxy = new ProxyService(new Config(), IPAddress.Parse("127.0.0.1"), 80);
+            var proxy = new ProxyService(new Config(), IPAddress.Parse("127.0.0.1"), 5500);
 
-            var cts = new CancellationTokenSource();
-
-            await proxy.Serve(cts.Token);
+            proxy.Serve();
         }
         catch (Exception ex)
         {
