@@ -11,17 +11,19 @@ namespace Muddler.Proxy;
 
 public class ProxyService
 {
-    private const int Backlog = 500;
+    private const int _backlog = 500;
     private readonly Config _config;
     private readonly IPAddress _address;
     private readonly int _port;
-    private Socket _server;
+    private Socket? _server;
 
     public ProxyService(Config config, IPAddress address, int port)
     {
+        // Define configuration of Proxy Service
         _config = config;
-        _address = address ?? throw new ArgumentNullException(nameof(address));
+        _address = address;
         _port = port;
+
 
         TriggerNewListner += OnNewConnectionEstablieshed;
     }
@@ -34,7 +36,7 @@ public class ProxyService
 
         _server.Bind(endpoint);
 
-        _server.Listen(Backlog);
+        _server.Listen(_backlog);
 
         TriggerNewListner.Invoke(this, new EventArgs());
 
@@ -43,28 +45,27 @@ public class ProxyService
         Console.ReadKey();
     }
 
-    protected virtual void OnNewConnectionEstablieshed(Object? sender, EventArgs? e)
+    protected virtual void OnNewConnectionEstablieshed(object? sender, EventArgs? e)
     {
-        Console.WriteLine("Begin listening for new connections");
-
-         var memPool_in = MemoryPool<byte>.Shared.Rent(1_024);
-         var memPool_out = MemoryPool<byte>.Shared.Rent(1_024); 
+        Console.WriteLine("Begin listening for new connections"); 
 
         //preallocate proxy client
-        var pc = new ProxyClient(_address, _port, TriggerNewListner, memPool_in, memPool_out);
+        var pc = new ProxyClient(_address, _port, TriggerNewListner );
 
         //create transfer object
         var acceptEventArg = new SocketAsyncEventArgs();
 
         acceptEventArg.Completed += new EventHandler<SocketAsyncEventArgs>(pc.AcceptEventArg_Completed);
 
+        if (_server == null) throw new NotSupportedException("Server not initialized cannot proceed");
+
         var willRaiseEvent = _server.AcceptAsync(acceptEventArg);
 
         if (!willRaiseEvent)
         {
-            pc.Start(acceptEventArg);
+            _ = pc.Start(acceptEventArg);
         }
     }
 
-    public event EventHandler TriggerNewListner;
+    event EventHandler TriggerNewListner;
 }

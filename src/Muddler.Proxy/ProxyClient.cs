@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using static Muddler.Proxy.ProxyService;
 
 namespace Muddler.Proxy;
 
@@ -17,22 +18,19 @@ namespace Muddler.Proxy;
 /// </summary>
 internal class ProxyClient
 {
-    private const bool LogEnabled = false;
+    private readonly bool _logEnabled;
     private readonly IPAddress _address;
     private readonly int _port;
     private readonly EventHandler _startNewHandler;
-    private readonly IMemoryOwner<byte> _memory_in;
-    private readonly IMemoryOwner<byte> _memory_out;
     private readonly int _context;
 
-    public ProxyClient(IPAddress address, int port, EventHandler startNewHandler, IMemoryOwner<byte>  memory_in, IMemoryOwner<byte> memory_out)
+    public ProxyClient(IPAddress address, int port, EventHandler startNewHandler, bool LogEnabled = false)
     {
         _address = address;
         _port = port;
-        _startNewHandler = startNewHandler; 
-        _memory_in = memory_in;
-        _memory_out = memory_out;
+        _startNewHandler = startNewHandler;
         _context = (new Random()).Next(0, 100);
+        _logEnabled = LogEnabled;
     }
 
     public void AcceptEventArg_Completed(object? sender, SocketAsyncEventArgs? e)
@@ -54,11 +52,11 @@ internal class ProxyClient
 
         _startNewHandler.Invoke(this, EventArgs.Empty);
 
-        var fromClientToProxied = Task.Run(async () => await Shuffle("Proxied to Client", outSocket, inSocket, _memory_in.Memory));
+        var fromProxidedToClient = Task.Run(async() => await Shuffle("Proxied to Client", outSocket, inSocket));
 
-        var fromProxiedToClient = Task.Run(async () => await Shuffle("Client to Proxied", inSocket, outSocket,_memory_out.Memory));
+        var fromClientToProxied = Task.Run(async () => await Shuffle("Client to Proxied", inSocket, outSocket));
 
-        Task.WaitAll(new[] { fromClientToProxied, fromProxiedToClient });
+        Task.WaitAll(new[] { fromClientToProxied, fromProxidedToClient });
 
         CloseAllSockets(outSocket, inSocket);
 
@@ -82,15 +80,16 @@ internal class ProxyClient
             Console.WriteLine($"CTX:{_context}: Closed socket from client to Muddler");
         }
 
-        Console.WriteLine($"CTX:{_context}: Disposing buffers");
-        _memory_in.Dispose();
-        _memory_out.Dispose();
     }
 
-    private async Task Shuffle(string direction, Socket outSocket, Socket inSocket, Memory<byte> buffer)
+    private async Task Shuffle(string direction, Socket outSocket, Socket inSocket)
     {
         try
-        {          
+        {
+            using var memPool_in = MemoryPool<byte>.Shared.Rent(1_024);
+
+            var buffer = memPool_in.Memory;
+
             Console.WriteLine($"CTX:{_context}: Begin streaming from {direction}");
 
             while (true)
@@ -102,10 +101,11 @@ internal class ProxyClient
                 if (size == 0)
                     break;
 
-                if (LogEnabled)
+                if (_logEnabled)
                     LogContent(direction, buffer, size);
 
                 if (!inSocket.Connected) break;
+
                 await inSocket.SendAsync(buffer[..size], SocketFlags.None);
 
             }
