@@ -35,6 +35,7 @@ internal class ProxyClient
 
     public void AcceptEventArg_Completed(object? sender, SocketAsyncEventArgs? e)
     {
+        //Start(e);
         _ = Task.Run(async () => await Start(e));
     }
 
@@ -52,9 +53,9 @@ internal class ProxyClient
 
         _startNewHandler.Invoke(this, EventArgs.Empty);
 
-        var fromProxidedToClient = Task.Run(async() => await Shuffle("Proxied to Client", outSocket, inSocket));
+        var fromProxidedToClient = Task.Run(async () => await Shuffle("Proxied to Client", outSocket, inSocket, _context, _logEnabled));
 
-        var fromClientToProxied = Task.Run(async () => await Shuffle("Client to Proxied", inSocket, outSocket));
+        var fromClientToProxied = Task.Run(async () => await Shuffle("Client to Proxied", inSocket, outSocket, _context, _logEnabled));
 
         Task.WaitAll(new[] { fromClientToProxied, fromProxidedToClient });
 
@@ -82,7 +83,7 @@ internal class ProxyClient
 
     }
 
-    private async Task Shuffle(string direction, Socket outSocket, Socket inSocket)
+    private static async Task Shuffle(string direction, Socket outSocket, Socket inSocket, int context, bool logEnabled)
     {
         try
         {
@@ -90,7 +91,7 @@ internal class ProxyClient
 
             var buffer = memPool_in.Memory;
 
-            Console.WriteLine($"CTX:{_context}: Begin streaming from {direction}");
+            Console.WriteLine($"CTX:{ context}: Begin streaming from {direction}");
 
             while (true)
             {
@@ -101,8 +102,8 @@ internal class ProxyClient
                 if (size == 0)
                     break;
 
-                if (_logEnabled)
-                    LogContent(direction, buffer, size);
+                if (logEnabled)
+                    LogContent(context, direction, buffer, size);
 
                 if (!inSocket.Connected) break;
 
@@ -112,14 +113,14 @@ internal class ProxyClient
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"CTX: {_context} encountered error {ex.Message} ");
+            Console.WriteLine($"CTX: { context} encountered error {ex.Message} ");
         }
     }
 
-    private void LogContent(string direction, Memory<byte> buffer, int size)
+    private static void LogContent(int context, string direction, Memory<byte> buffer, int size)
     {
         var deserialized = Encoding.UTF8.GetString(buffer.ToArray(), 0, size);
 
-        Console.WriteLine($"CTX:{_context}: SENDING DIRECTION {direction}: CONTENT  : \n ---------------- \n\n {deserialized} \n\n ---------------- \n\n");
+        Console.WriteLine($"CTX:{context}: SENDING DIRECTION {direction}: CONTENT  : \n ---------------- \n\n {deserialized} \n\n ---------------- \n\n");
     }
 }
