@@ -47,10 +47,6 @@ internal class ProxyClient
 
         _startNewHandler.Invoke(this, EventArgs.Empty);
 
-        //using var memPool_in = MemoryPool<byte>.Shared.Rent(1_024); 
-
-        //using var memPool_out = MemoryPool<byte>.Shared.Rent(1_024);
-
         var buffer_in = ArrayPool<byte>.Shared.Rent(1_024);
         var buffer_out = ArrayPool<byte>.Shared.Rent(1_024);
 
