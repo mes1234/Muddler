@@ -1,12 +1,7 @@
-﻿using System;
-using System.Buffers;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
-using System.Threading.Tasks;
-using static Muddler.Proxy.ProxyService;
+using System.Text; 
 
 namespace Muddler.Proxy;
 
@@ -34,8 +29,7 @@ internal class ProxyClient
     }
 
     public void AcceptEventArg_Completed(object? sender, SocketAsyncEventArgs? e)
-    {
-        //Start(e);
+    { 
         _ = Task.Run(async () => await Start(e));
     }
 
@@ -53,9 +47,16 @@ internal class ProxyClient
 
         _startNewHandler.Invoke(this, EventArgs.Empty);
 
-        var fromProxidedToClient = Task.Run(async () => await Shuffle("Proxied to Client", outSocket, inSocket, _context, _logEnabled));
+        //using var memPool_in = MemoryPool<byte>.Shared.Rent(1_024); 
 
-        var fromClientToProxied = Task.Run(async () => await Shuffle("Client to Proxied", inSocket, outSocket, _context, _logEnabled));
+        //using var memPool_out = MemoryPool<byte>.Shared.Rent(1_024);
+
+        var buffer_in = ArrayPool<byte>.Shared.Rent(1_024);
+        var buffer_out = ArrayPool<byte>.Shared.Rent(1_024);
+
+        var fromProxidedToClient = Task.Run(async () => await Shuffle("Proxied to Client", outSocket, inSocket, _context, _logEnabled, buffer_in));
+
+        var fromClientToProxied = Task.Run(async () => await Shuffle("Client to Proxied", inSocket, outSocket, _context, _logEnabled, buffer_out));
 
         Task.WaitAll(new[] { fromClientToProxied, fromProxidedToClient });
 
@@ -83,14 +84,10 @@ internal class ProxyClient
 
     }
 
-    private static async Task Shuffle(string direction, Socket outSocket, Socket inSocket, int context, bool logEnabled)
+    private static async Task Shuffle(string direction, Socket outSocket, Socket inSocket, int context, bool logEnabled, Memory<byte> buffer)
     {
         try
         {
-            using var memPool_in = MemoryPool<byte>.Shared.Rent(1_024);
-
-            var buffer = memPool_in.Memory;
-
             Console.WriteLine($"CTX:{ context}: Begin streaming from {direction}");
 
             while (true)
