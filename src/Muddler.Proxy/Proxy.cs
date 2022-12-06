@@ -11,7 +11,7 @@ namespace Muddler.Proxy;
 
 public class ProxyService
 {
-    private const int Backlog = 50;
+    private const int Backlog = 100;
     private readonly Config _config;
     private readonly IPAddress _address;
     private readonly int _port;
